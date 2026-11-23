@@ -98,11 +98,6 @@
 .dsh-todo-week-head{font-size:10.5px;color:${C.dim};display:flex;justify-content:space-between;padding:2px 4px;border-bottom:1px solid ${C.border}}
 .dsh-todo-week-col{border:1px solid ${C.border};border-radius:6px;min-height:180px;padding:4px;display:flex;flex-direction:column;gap:3px;overflow:hidden}
 .dsh-todo-week-time{color:${C.dim};margin-right:4px;font-variant-numeric:tabular-nums}
-.dsh-todo-day{display:flex;flex-direction:column;padding:0 18px 16px;flex:1;overflow:auto}
-.dsh-todo-day-all{border:1px solid ${C.border};border-radius:6px;padding:6px;margin:8px 0;display:flex;flex-direction:column;gap:3px;min-height:36px}
-.dsh-todo-hour-row{display:flex;gap:8px;border-top:1px solid ${C.border};min-height:36px;padding:3px 0}
-.dsh-todo-hour-label{flex:0 0 44px;font-size:10.5px;color:${C.dim};text-align:right;padding-top:2px}
-.dsh-todo-hour-tasks{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
 .dsh-todo-matrix{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 18px 16px;flex:1;min-height:0;overflow:auto}
 .dsh-todo-matrix-cell{border:1px solid ${C.border};border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:140px}
 .dsh-todo-stats{padding:12px 18px 18px;display:flex;flex-direction:column;gap:14px;flex:1;overflow:auto}
@@ -577,7 +572,7 @@
         const [calendarMode, setCalendarMode] = React.useState(() => {
           try {
             const stored = window.localStorage.getItem('dsh-sidebar-todo:calendar')
-            return ['month', 'week', 'day'].includes(stored) ? stored : 'month'
+            return ['week', 'month'].includes(stored) ? stored : 'month'
           } catch {
             return 'month'
           }
@@ -608,6 +603,7 @@
         const folderTimerRef = React.useRef(0)
         const initialReminderIdsRef = React.useRef(new Set())
         const searchRef = React.useRef(null)
+        const calRef = React.useRef(null)
 
         const refresh = React.useCallback(async () => {
           if (pollInFlightRef.current) return
@@ -683,6 +679,7 @@
         const taskById = id => state.tasks.find(task => task.id === id)
 
         const matchesSelection = task => {
+          if (selection.kind === 'calendar') return task.status === 'open'
           if (selection.kind === 'view') {
             if (selection.id === 'completed') return task.status === 'completed'
             if (task.status === 'completed') return false
@@ -725,17 +722,35 @@
           try { window.localStorage.setItem('dsh-sidebar-todo:calendar', calendarMode) } catch { /* ignore */ }
         }, [calendarMode])
 
-        // A page left open across midnight must move the day/week anchor to the
-        // new today; otherwise the day view keeps showing yesterday and looks empty.
+        // A page left open across midnight must move the week anchor to the
+        // new today; otherwise the week view keeps showing last week and looks empty.
         React.useEffect(() => {
           const key = new Date().toDateString()
           if (key === todayKeyRef.current) return
           const previous = new Date(Date.now() - DAY).toDateString()
           todayKeyRef.current = key
-          if ((calendarMode === 'day' || calendarMode === 'week') && new Date(calendarMonth).toDateString() === previous) {
+          if (calendarMode === 'week' && new Date(calendarMonth).toDateString() === previous) {
             setCalendarMonth(Date.now())
           }
         }, [now, calendarMode, calendarMonth])
+
+        // Wheel over the calendar moves one period (month/week). The native
+        // listener is non-passive so the page itself does not scroll.
+        React.useEffect(() => {
+          const node = calRef.current
+          if (node === null) return
+          let last = 0
+          const onWheel = event => {
+            if (Math.abs(event.deltaY) < 8) return
+            const stamp = Date.now()
+            if (stamp - last < 350) return
+            last = stamp
+            event.preventDefault()
+            shiftCalendar(event.deltaY > 0 ? 1 : -1)
+          }
+          node.addEventListener('wheel', onWheel, { passive: false })
+          return () => node.removeEventListener('wheel', onWheel)
+        }, [mode, calendarMode, calendarMonth])
 
         React.useEffect(() => {
           setSelectedIds([])
@@ -744,6 +759,7 @@
         }, [selection, search, sortMode])
 
         const countFor = item => {
+          if (item.kind === 'calendar') return liveTasks.filter(task => task.status === 'open').length
           if (item.kind === 'view') {
             if (item.id === 'completed') return liveTasks.filter(task => task.status === 'completed').length
             return liveTasks.filter(task => task.status === 'open' && (item.id === 'today'
@@ -756,7 +772,11 @@
 
         const title = selection.kind === 'view'
           ? { today: '今天', upcoming: '最近 7 天', all: '全部', completed: '已完成' }[selection.id]
-          : selection.kind === 'list' ? (listById(selection.id)?.name || '清单') : `#${selection.name}`
+          : selection.kind === 'list'
+            ? (listById(selection.id)?.name || '清单')
+            : selection.kind === 'tag'
+              ? `#${selection.name}`
+              : (selection.id === 'week' ? '周视图' : '月视图')
 
         const openDetail = task => {
           setCreating(false)
@@ -1291,12 +1311,21 @@
           }
         }
 
+        const selectSmart = item => {
+          setSelection(item)
+          if (item.kind === 'calendar') {
+            setCalendarMode(item.id)
+            setMode('calendar')
+            setCalendarMonth(Date.now())
+          }
+        }
+
         const navButton = (item, label, count, glyph) => h('button', {
           key: `${item.kind}:${item.id ?? item.name ?? ''}`,
           type: 'button',
           className: 'dsh-todo-nav-row',
           'aria-current': selection.kind === item.kind && (selection.id ?? selection.name) === (item.id ?? item.name) ? 'true' : 'false',
-          onClick: () => setSelection(item),
+          onClick: () => selectSmart(item),
         },
         h('span', { className: 'dsh-todo-nav-glyph', 'aria-hidden': 'true' }, glyph),
         h('span', { className: 'dsh-todo-nav-name' }, label),
@@ -1740,11 +1769,8 @@
           const current = new Date(calendarMonth)
           if (calendarMode === 'month') {
             setCalendarMonth(new Date(current.getFullYear(), current.getMonth() + delta, 1).getTime())
-          } else if (calendarMode === 'week') {
-            current.setDate(current.getDate() + delta * 7)
-            setCalendarMonth(current.getTime())
           } else {
-            current.setDate(current.getDate() + delta)
+            current.setDate(current.getDate() + delta * 7)
             setCalendarMonth(current.getTime())
           }
         }
@@ -1766,16 +1792,6 @@
           } else {
             target.setHours(23, 59, 59, 999)
           }
-          void mutate({ op: 'task.update', id: task.id, dueAt: target.getTime() })
-        }
-
-        const dropOnHour = (day, hour) => {
-          if (boardDragId === null) return
-          const task = taskById(boardDragId)
-          setBoardDragId(null)
-          if (task === undefined) return
-          const target = new Date(day)
-          target.setHours(hour, 0, 0, 0)
           void mutate({ op: 'task.update', id: task.id, dueAt: target.getTime() })
         }
 
@@ -1812,29 +1828,13 @@
           let label
           if (calendarMode === 'month') {
             label = `${anchor.getFullYear()} 年 ${anchor.getMonth() + 1} 月`
-          } else if (calendarMode === 'week') {
+          } else {
             const offset = (anchor.getDay() + 6) % 7
             const start = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - offset)
             const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6)
             label = `${start.getFullYear()} 年 ${start.getMonth() + 1}月${start.getDate()}日 – ${end.getMonth() + 1}月${end.getDate()}日`
-          } else {
-            label = `${anchor.getFullYear()} 年 ${anchor.getMonth() + 1} 月 ${anchor.getDate()} 日 ${WEEK[anchor.getDay()]}`
           }
           const header = h('div', { className: 'dsh-todo-viewbar' },
-            h('select', {
-              value: calendarMode,
-              'aria-label': '日历范围',
-              onChange: event => {
-                const next = event.target.value
-                setCalendarMode(next)
-                // Month navigation parks the anchor at the 1st; switching to
-                // week/day should start from today, not from the 1st.
-                if (next === 'day' || next === 'week') setCalendarMonth(Date.now())
-              },
-            },
-            h('option', { value: 'month' }, '月'),
-            h('option', { value: 'week' }, '周'),
-            h('option', { value: 'day' }, '日')),
             h('button', { type: 'button', onClick: () => shiftCalendar(-1), 'aria-label': '上一段' }, '‹'),
             h('strong', null, label),
             h('button', { type: 'button', onClick: () => shiftCalendar(1), 'aria-label': '下一段' }, '›'),
@@ -1852,7 +1852,7 @@
             const cells = []
             for (let index = 0; index < offset; index += 1) cells.push(null)
             for (let day = 1; day <= days; day += 1) cells.push(new Date(year, month, day))
-            return h('div', { className: 'dsh-todo-cal-wrap' },
+            return h('div', { className: 'dsh-todo-cal-wrap', ref: calRef },
               header,
               h('div', { className: 'dsh-todo-cal' },
                 weekdayNames.map(name => h('div', { key: name, className: 'dsh-todo-cal-week' }, `周${name}`)),
@@ -1876,7 +1876,7 @@
             const offset = (anchor.getDay() + 6) % 7
             const start = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - offset)
             const weekDays = Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index))
-            return h('div', { className: 'dsh-todo-cal-wrap' },
+            return h('div', { className: 'dsh-todo-cal-wrap', ref: calRef },
               header,
               h('div', { className: 'dsh-todo-week' },
                 weekDays.map(day => h('div', { key: `head-${dayKey(day.getTime())}`, className: 'dsh-todo-week-head' },
@@ -1895,31 +1895,6 @@
                     : tasks.map(task => calendarChip(task, true)))
                 })))
           }
-
-          const day = new Date(anchor)
-          day.setHours(0, 0, 0, 0)
-          const dayTasks = byDay.get(dayKey(day.getTime())) || []
-          const allDay = dayTasks.filter(task => {
-            const date = new Date(task.dueAt)
-            return date.getHours() === 23 && date.getMinutes() === 59
-          })
-          const timed = dayTasks.filter(task => !allDay.includes(task))
-          const hours = Array.from({ length: 24 }, (_, hour) => hour)
-          const hourNodes = hours.map(hour => h('div', {
-            key: hour,
-            className: 'dsh-todo-hour-row',
-            onDragOver: event => event.preventDefault(),
-            onDrop: event => { event.preventDefault(); dropOnHour(day.getTime(), hour) },
-          },
-          h('div', { className: 'dsh-todo-hour-label' }, `${String(hour).padStart(2, '0')}:00`),
-          h('div', { className: 'dsh-todo-hour-tasks' },
-            timed.filter(task => new Date(task.dueAt).getHours() === hour).map(task => calendarChip(task, true)))))
-          const allDayNode = h('div', { className: 'dsh-todo-day-all' },
-            h('div', { className: 'dsh-todo-cal-date' }, '全天'),
-            allDay.length === 0 ? null : allDay.map(task => calendarChip(task, false)))
-          return h('div', { className: 'dsh-todo-cal-wrap' },
-            header,
-            h('div', { className: 'dsh-todo-day' }, allDayNode, hourNodes))
         }
 
         const matrixView = () => {
@@ -2000,6 +1975,8 @@
         const smartItems = [
           { item: { kind: 'view', id: 'today' }, label: '今天', glyph: '☀' },
           { item: { kind: 'view', id: 'upcoming' }, label: '最近 7 天', glyph: '▤' },
+          { item: { kind: 'calendar', id: 'week' }, label: '周视图', glyph: '▦' },
+          { item: { kind: 'calendar', id: 'month' }, label: '月视图', glyph: '▣' },
           { item: { kind: 'view', id: 'all' }, label: '全部', glyph: '≡' },
           { item: { kind: 'view', id: 'completed' }, label: '已完成', glyph: '✓' },
         ]
@@ -2066,7 +2043,16 @@
                   className: 'dsh-todo-view-select',
                   value: mode,
                   'aria-label': '视图',
-                  onChange: event => setMode(event.target.value),
+                  onChange: event => {
+                    const next = event.target.value
+                    setMode(next)
+                    if (next === 'calendar') {
+                      if (!['week', 'month'].includes(calendarMode)) setCalendarMode('month')
+                      setCalendarMonth(Date.now())
+                    } else if (selection.kind === 'calendar') {
+                      setSelection({ kind: 'view', id: 'all' })
+                    }
+                  },
                 },
                 h('option', { value: 'list' }, '列表'),
                 h('option', { value: 'board' }, '看板'),
