@@ -1,5 +1,6 @@
 param(
-  [string]$Registry = 'https://registry.npmjs.org'
+  [string]$Registry = 'https://registry.npmjs.org',
+  [string]$Otp = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,5 +11,10 @@ if (-not (Test-Path $cache)) {
   New-Item -ItemType Directory -Path $cache -Force | Out-Null
 }
 
-Write-Host "Publishing $(Get-Content package.json -Raw | ConvertFrom-Json | Select-Object -ExpandProperty name) to $Registry ..."
-npm publish --registry=$Registry --access public --cache $cache
+$package = Get-Content package.json -Raw | ConvertFrom-Json
+if ([string]::IsNullOrWhiteSpace($Otp)) {
+  $Otp = Read-Host 'npm 6-digit OTP'
+}
+
+Write-Host "Publishing $($package.name)@$($package.version) to $Registry ..."
+npm publish --registry=$Registry --access public --otp=$Otp --cache $cache
