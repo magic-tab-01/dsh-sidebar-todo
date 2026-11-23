@@ -212,8 +212,8 @@
 .dsh-todo-reminder-time{flex:1 1 auto;font-size:12px}
 .dsh-todo-reminder-state{font-size:10.5px;color:${C.dim}}
 .dsh-todo-days{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
-.dsh-todo-day{border:1px solid ${C.border};background:transparent;color:${C.dim};border-radius:999px;width:24px;height:24px;font-size:11px;cursor:pointer;font-family:inherit;padding:0}
-.dsh-todo-day[aria-pressed="true"]{border-color:${C.accent};color:${C.accent};font-weight:600}
+.dsh-todo-day-toggle{border:1px solid ${C.border};background:transparent;color:${C.dim};border-radius:999px;width:24px;height:24px;font-size:11px;cursor:pointer;font-family:inherit;padding:0}
+.dsh-todo-day-toggle[aria-pressed="true"]{border-color:${C.accent};color:${C.accent};font-weight:600}
 .dsh-todo-repeat-summary{font-size:11px;color:${C.dim};margin-top:2px}
 @media (max-width:900px){
   .dsh-todo-detail{position:absolute;top:0;right:0;bottom:0;width:min(340px,100%);box-shadow:-8px 0 24px rgba(0,0,0,.18);z-index:2}
@@ -2334,7 +2334,7 @@
                       weekdayLabels.map(([label, day]) => h('button', {
                         key: day,
                         type: 'button',
-                        className: 'dsh-todo-day',
+                        className: 'dsh-todo-day-toggle',
                         'aria-pressed': detailDraft.weekdays.includes(day) ? 'true' : 'false',
                         'aria-label': `周${label}`,
                         title: `周${label}`,
@@ -2450,7 +2450,7 @@
                     [['一', 1], ['二', 2], ['三', 3], ['四', 4], ['五', 5], ['六', 6], ['日', 7]].map(([name, day]) => h('button', {
                       key: day,
                       type: 'button',
-                      className: 'dsh-todo-day',
+                      className: 'dsh-todo-day-toggle',
                       'aria-pressed': createDraft.weekdays.includes(day) ? 'true' : 'false',
                       'aria-label': `周${name}`,
                       onClick: () => setCreateDraft(current => ({
