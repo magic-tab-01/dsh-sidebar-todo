@@ -594,6 +594,7 @@
         const [hint, setHint] = React.useState('')
         const [undo, setUndo] = React.useState(null)
         const [now, setNow] = React.useState(() => Date.now())
+        const todayKeyRef = React.useRef(new Date().toDateString())
         const [notifyPermission, setNotifyPermission] = React.useState(() => (typeof Notification === 'undefined' ? 'unsupported' : Notification.permission))
         const [busy, setBusy] = React.useState(false)
         const pendingRef = React.useRef(false)
@@ -722,6 +723,18 @@
         React.useEffect(() => {
           try { window.localStorage.setItem('dsh-sidebar-todo:calendar', calendarMode) } catch { /* ignore */ }
         }, [calendarMode])
+
+        // A page left open across midnight must move the day/week anchor to the
+        // new today; otherwise the day view keeps showing yesterday and looks empty.
+        React.useEffect(() => {
+          const key = new Date().toDateString()
+          if (key === todayKeyRef.current) return
+          const previous = new Date(Date.now() - DAY).toDateString()
+          todayKeyRef.current = key
+          if ((calendarMode === 'day' || calendarMode === 'week') && new Date(calendarMonth).toDateString() === previous) {
+            setCalendarMonth(Date.now())
+          }
+        }, [now, calendarMode, calendarMonth])
 
         React.useEffect(() => {
           setSelectedIds([])
@@ -1810,7 +1823,13 @@
             h('select', {
               value: calendarMode,
               'aria-label': '日历范围',
-              onChange: event => setCalendarMode(event.target.value),
+              onChange: event => {
+                const next = event.target.value
+                setCalendarMode(next)
+                // Month navigation parks the anchor at the 1st; switching to
+                // week/day should start from today, not from the 1st.
+                if (next === 'day' || next === 'week') setCalendarMonth(Date.now())
+              },
             },
             h('option', { value: 'month' }, '月'),
             h('option', { value: 'week' }, '周'),
