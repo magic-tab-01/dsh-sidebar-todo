@@ -265,6 +265,13 @@ function readState() {
   return normalized
 }
 
+/** Local midnight at or before `ms`. */
+function startOfDay(ms) {
+  const date = new Date(ms)
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
+}
+
 /** Local end of the day containing `ms`. */
 function endOfDay(ms) {
   const date = new Date(ms)
@@ -277,13 +284,15 @@ function stats(tasks, now = Date.now()) {
   const live = tasks.filter(task => !task.deletedAt)
   const open = live.filter(task => task.status === 'open')
   const todayEnd = endOfDay(now)
+  const todayStart = startOfDay(now)
+  const upcomingEnd = endOfDay(todayStart + 6 * 86400000)
   return {
     total: live.length,
     open: open.length,
     done: live.length - open.length,
     overdue: open.filter(task => task.dueAt !== null && task.dueAt < now).length,
     today: open.filter(task => task.dueAt !== null && task.dueAt <= todayEnd).length,
-    upcoming: open.filter(task => task.dueAt !== null && task.dueAt > todayEnd && task.dueAt <= endOfDay(todayEnd + 6 * 86400000)).length,
+    upcoming: open.filter(task => task.dueAt !== null && task.dueAt >= todayStart && task.dueAt <= upcomingEnd).length,
   }
 }
 
@@ -380,6 +389,8 @@ function nextDueAt(task, now = Date.now()) {
 function queryTasks(state, options = {}) {
   const now = Date.now()
   const todayEnd = endOfDay(now)
+  const todayStart = startOfDay(now)
+  const upcomingEnd = endOfDay(todayStart + 6 * 86400000)
   const view = String(options.view || options.filter || 'all')
   const search = String(options.search || '').trim().toLowerCase()
   const listId = options.listId || null
@@ -389,7 +400,7 @@ function queryTasks(state, options = {}) {
     if (task.deletedAt) return false
     if (includeDone ? task.status !== 'completed' : task.status === 'completed') return false
     if (view === 'today' && (task.dueAt === null || task.dueAt > todayEnd)) return false
-    if (view === 'upcoming' && (task.dueAt === null || task.dueAt <= todayEnd || task.dueAt > endOfDay(todayEnd + 6 * 86400000))) return false
+    if (view === 'upcoming' && (task.dueAt === null || task.dueAt < todayStart || task.dueAt > upcomingEnd)) return false
     if (listId !== null && task.listId !== listId) return false
     if (tag !== null && !task.tags.includes(tag)) return false
     if (search !== '') {

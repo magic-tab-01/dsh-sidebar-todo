@@ -672,6 +672,7 @@
         const parsed = React.useMemo(() => (draft.trim() === '' ? null : parseQuickAdd(draft, now)), [draft, now])
         const liveTasks = state.tasks.filter(task => !task.deletedAt)
         const endToday = endOfDay(now)
+        const startToday = startOfDay(now)
         const lists = state.lists.filter(list => !list.deletedAt)
         const folders = [...(state.folders || [])].sort((a, b) => (a.order || 0) - (b.order || 0))
         const ungroupedLists = lists.filter(list => !list.folderId)
@@ -686,7 +687,7 @@
             if (selection.id === 'completed') return task.status === 'completed'
             if (task.status === 'completed') return false
             if (selection.id === 'today') return task.dueAt !== null && task.dueAt <= endToday
-            if (selection.id === 'upcoming') return task.dueAt !== null && task.dueAt > endToday && task.dueAt <= endOfDay(now + 6 * DAY)
+            if (selection.id === 'upcoming') return task.dueAt !== null && task.dueAt >= startToday && task.dueAt <= endOfDay(now + 6 * DAY)
             return true
           }
           if (task.status === 'completed') return false
@@ -747,7 +748,7 @@
             if (item.id === 'completed') return liveTasks.filter(task => task.status === 'completed').length
             return liveTasks.filter(task => task.status === 'open' && (item.id === 'today'
               ? task.dueAt !== null && task.dueAt <= endToday
-              : item.id === 'upcoming' ? task.dueAt !== null && task.dueAt > endToday : true)).length
+              : item.id === 'upcoming' ? task.dueAt !== null && task.dueAt >= startToday && task.dueAt <= endOfDay(now + 6 * DAY) : true)).length
           }
           if (item.kind === 'list') return liveTasks.filter(task => task.status === 'open' && task.listId === item.id).length
           return liveTasks.filter(task => task.status === 'open' && task.tags.includes(item.name)).length
