@@ -1322,7 +1322,7 @@
           // The calendar has no day view: "today" and "next 7 days" are both
           // best represented by the week grid, so switch the calendar range
           // when the user picks them while a calendar is open.
-          if (mode === 'calendar' && (item.id === 'today' || item.id === 'upcoming')) {
+          if (mode === 'calendar' && item.id === 'today') {
             setCalendarMode('week')
             setCalendarMonth(Date.now())
           }
@@ -1982,7 +1982,6 @@
 
         const smartItems = [
           { item: { kind: 'view', id: 'today' }, label: '今天', glyph: '☀' },
-          { item: { kind: 'view', id: 'upcoming' }, label: '最近 7 天', glyph: '▤' },
           { item: { kind: 'calendar', id: 'week' }, label: '周视图', glyph: '▦' },
           { item: { kind: 'calendar', id: 'month' }, label: '月视图', glyph: '▣' },
           { item: { kind: 'view', id: 'all' }, label: '全部', glyph: '≡' },
