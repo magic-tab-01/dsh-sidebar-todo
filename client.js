@@ -103,6 +103,9 @@
 .dsh-todo-cal-date{font-size:10.5px;color:${C.dim};text-align:right}
 .dsh-todo-cal-task{font-size:10.5px;padding:1px 4px;border-radius:3px;background:var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, ${C.text} 5%, transparent));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .dsh-todo-cal-more{font-size:10px;color:${C.dim}}
+.dsh-todo-unscheduled{display:flex;align-items:flex-start;gap:8px;padding:6px 18px;border-bottom:1px solid ${C.border};flex:none;max-height:96px;overflow:auto}
+.dsh-todo-unscheduled-title{font-size:10.5px;color:${C.dim};flex:none;padding-top:3px}
+.dsh-todo-unscheduled-list{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
 .dsh-todo-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:0 18px 16px;flex:1;overflow:auto;align-content:start}
 .dsh-todo-week-head{font-size:10.5px;color:${C.dim};display:flex;justify-content:space-between;padding:2px 4px;border-bottom:1px solid ${C.border}}
 .dsh-todo-week-col{border:1px solid ${C.border};border-radius:6px;min-height:180px;padding:4px;display:flex;flex-direction:column;gap:3px;overflow:hidden}
@@ -1909,6 +1912,11 @@
               type: 'button',
               onClick: () => { const date = new Date(); setCalendarMonth(date.getTime()) },
             }, '今天'))
+          const undatedTasks = rows.filter(task => task.dueAt === null)
+          const unscheduled = undatedTasks.length === 0 ? null : h('div', { className: 'dsh-todo-unscheduled' },
+            h('span', { className: 'dsh-todo-unscheduled-title' }, `未排期 ${undatedTasks.length}`),
+            h('div', { className: 'dsh-todo-unscheduled-list' },
+              undatedTasks.map(task => calendarChip(task, false))))
 
           if (calendarMode === 'month') {
             const year = anchor.getFullYear()
@@ -1921,6 +1929,7 @@
             for (let day = 1; day <= days; day += 1) cells.push(new Date(year, month, day))
             return h('div', { className: 'dsh-todo-cal-wrap', ref: calRef },
               header,
+              unscheduled,
               h('div', { className: 'dsh-todo-cal' },
                 weekdayNames.map(name => h('div', { key: name, className: 'dsh-todo-cal-week' }, `周${name}`)),
                 cells.map((date, index) => {
@@ -1945,6 +1954,7 @@
             const weekDays = Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index))
             return h('div', { className: 'dsh-todo-cal-wrap', ref: calRef },
               header,
+              unscheduled,
               h('div', { className: 'dsh-todo-week' },
                 weekDays.map(day => h('div', { key: `head-${dayKey(day.getTime())}`, className: 'dsh-todo-week-head' },
                   h('span', null, `周${weekdayNames[(day.getDay() + 6) % 7]}`),
