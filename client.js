@@ -1317,6 +1317,14 @@
             setCalendarMode(item.id)
             setMode('calendar')
             setCalendarMonth(Date.now())
+            return
+          }
+          // The calendar has no day view: "today" and "next 7 days" are both
+          // best represented by the week grid, so switch the calendar range
+          // when the user picks them while a calendar is open.
+          if (mode === 'calendar' && (item.id === 'today' || item.id === 'upcoming')) {
+            setCalendarMode('week')
+            setCalendarMonth(Date.now())
           }
         }
 
