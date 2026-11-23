@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Sidebar todo",
-    "description": "A resident todo list in the left sidebar: today / week / month / all, folders and lists, tags, subtasks, multiple reminders with snooze, repeating tasks, a detail drawer, sort and drag, bulk actions, and board/week-month calendar/matrix/stats views. The agent shares the same store through todo_manage."
+    "description": "A resident todo list in the left sidebar: today / week / month / all, color-coded categories and folders, tags, subtasks, multiple reminders with snooze, repeating tasks, a detail drawer, sort and drag, bulk actions, and board/week-month calendar/matrix/stats views. The agent shares the same store through todo_manage."
   }
 }

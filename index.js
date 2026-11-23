@@ -40,7 +40,7 @@ function emptyState() {
     version: 3,
     revision: 0,
     folders: [],
-    lists: [{ id: 'inbox', name: '收件箱', order: 0, folderId: null, deletedAt: null }],
+    lists: [{ id: 'inbox', name: '收件箱', order: 0, folderId: null, color: '#4d6bfe', deletedAt: null }],
     tags: [],
     tasks: [],
     settings: { defaultListId: 'inbox', sort: 'smart' },
@@ -59,6 +59,11 @@ function sanitizeFolder(raw, index) {
   }
 }
 
+/** Validate a `#rrggbb` category color. */
+function parseColor(value) {
+  return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : null
+}
+
 /** Coerce one list row. */
 function sanitizeList(raw, index, folderIds = new Set()) {
   if (raw === null || typeof raw !== 'object') return null
@@ -69,6 +74,7 @@ function sanitizeList(raw, index, folderIds = new Set()) {
     name,
     order: Number.isFinite(raw.order) ? Number(raw.order) : index,
     folderId: typeof raw.folderId === 'string' && folderIds.has(raw.folderId) ? raw.folderId : null,
+    color: parseColor(raw.color),
     deletedAt: Number.isFinite(raw.deletedAt) ? Number(raw.deletedAt) : null,
   }
 }
@@ -164,7 +170,7 @@ function normalizeStore(parsed) {
   const folders = Array.isArray(parsed.folders) ? parsed.folders.map(sanitizeFolder).filter(Boolean) : []
   const folderIds = new Set(folders.map(folder => folder.id))
   const lists = Array.isArray(parsed.lists) ? parsed.lists.map((list, index) => sanitizeList(list, index, folderIds)).filter(Boolean) : []
-  if (!lists.some(list => list.id === 'inbox')) lists.unshift({ id: 'inbox', name: '收件箱', order: 0, folderId: null, deletedAt: null })
+  if (!lists.some(list => list.id === 'inbox')) lists.unshift({ id: 'inbox', name: '收件箱', order: 0, folderId: null, color: '#4d6bfe', deletedAt: null })
   const listIds = new Set(lists.map(list => list.id))
   const now = Date.now()
   const tasks = Array.isArray(parsed.tasks) ? parsed.tasks.map(task => sanitizeTask(task, listIds)).filter(Boolean) : []
@@ -527,28 +533,29 @@ function applyOp(store, op) {
 
   if (action === 'list.create') {
     const name = String(op.name || '').trim().slice(0, 60)
-    if (name === '') return { ok: false, error: '清单名称不能为空' }
+    if (name === '') return { ok: false, error: '分类名称不能为空' }
     const folderId = state.folders.some(folder => folder.id === op.folderId) ? op.folderId : null
-    const list = { id: newId('l'), name, order: lists().length, folderId, deletedAt: null }
+    const list = { id: newId('l'), name, order: lists().length, folderId, color: parseColor(op.color), deletedAt: null }
     return commit({ ...state, lists: [...state.lists, list] })
   }
 
   if (action === 'list.update' || action === 'list.rename') {
-    if (!lists().some(list => list.id === op.id)) return { ok: false, error: '找不到清单' }
+    if (!lists().some(list => list.id === op.id)) return { ok: false, error: '找不到分类' }
     const patch = {}
     if (op.name !== undefined) {
       const name = String(op.name).trim().slice(0, 60)
-      if (name === '') return { ok: false, error: '清单名称不能为空' }
+      if (name === '') return { ok: false, error: '分类名称不能为空' }
       patch.name = name
     }
     if (op.folderId !== undefined) patch.folderId = state.folders.some(folder => folder.id === op.folderId) ? op.folderId : null
+    if (op.color !== undefined) patch.color = parseColor(op.color)
     if (Object.keys(patch).length === 0) return { ok: true, state }
     return commit({ ...state, lists: state.lists.map(list => (list.id === op.id ? { ...list, ...patch } : list)) })
   }
 
   if (action === 'list.delete') {
     if (op.id === 'inbox') return { ok: false, error: '收件箱不能删除' }
-    if (!lists().some(list => list.id === op.id)) return { ok: false, error: '找不到清单' }
+    if (!lists().some(list => list.id === op.id)) return { ok: false, error: '找不到分类' }
     return commit({
       ...state,
       lists: state.lists.filter(list => list.id !== op.id),
@@ -591,7 +598,7 @@ function applyOp(store, op) {
     }
     if (bulkAction === 'move') {
       const listId = lists().some(list => list.id === op.listId) ? op.listId : null
-      if (listId === null) return { ok: false, error: '找不到目标清单' }
+      if (listId === null) return { ok: false, error: '找不到目标分类' }
       return commit({ ...state, tasks: state.tasks.map(task => (ids.includes(task.id) && !task.deletedAt ? { ...task, listId } : task)) })
     }
     return { ok: false, error: '未知批量操作' }
@@ -860,7 +867,7 @@ export function apply(ctx) {
           return {
             text: [
               `文件夹：${current.folders.length === 0 ? '（无）' : current.folders.map(folder => folder.name).join('、')}`,
-              `清单：${current.lists.map(list => `${folderName(list.folderId) ? `${folderName(list.folderId)}/` : ''}${list.name}（${list.id}）`).join('、')}`,
+              `分类：${current.lists.map(list => `${folderName(list.folderId) ? `${folderName(list.folderId)}/` : ''}${list.name}（${list.id}）`).join('、')}`,
               `标签：${current.tags.length === 0 ? '（无）' : current.tags.map(tag => `#${tag}`).join('、')}`,
               `排序：${current.settings.sort}`,
             ].join('\n'),

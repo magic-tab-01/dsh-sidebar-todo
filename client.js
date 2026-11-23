@@ -15,6 +15,7 @@
   const DAY = 86400000
   const WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
   const MODES = ['list', 'board', 'calendar', 'matrix', 'stats']
+  const CATEGORY_COLORS = ['#4d6bfe', '#2eb872', '#f5a524', '#e5534b', '#9b59b6', '#00a8b5', '#d97706', '#64748b']
   const NOTIFIED_KEY = 'dsh-sidebar-todo:notified'
 
   window.__ModuleLoader__.load({
@@ -51,11 +52,19 @@
 .dsh-todo-nav-item{display:flex;align-items:center}
 .dsh-todo-nav-actions button{border:0;background:transparent;color:${C.dim};cursor:pointer;font-size:11px;padding:0 3px;font-family:inherit;line-height:20px;min-width:20px;min-height:20px}
 .dsh-todo-nav-actions button:hover{color:${C.text}}
+.dsh-todo-color-dot{flex:none;width:9px;height:9px;border-radius:50%;display:inline-block}
+.dsh-todo-colors{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:4px}
+.dsh-todo-color{width:18px;height:18px;border-radius:50%;border:1px solid ${C.border};cursor:pointer;padding:0}
+.dsh-todo-color[aria-pressed="true"]{outline:2px solid ${C.accent};outline-offset:1px}
+.dsh-todo-color-input{width:26px;height:20px;padding:0;border:1px solid ${C.border};background:transparent;cursor:pointer}
+.dsh-todo-board-col-name{display:flex;align-items:center;gap:5px;min-width:0}
+.dsh-todo-stat-name{display:flex;align-items:center;gap:6px}
 .dsh-todo-nav-input{width:100%;box-sizing:border-box;background:transparent;border:1px solid ${C.accent};border-radius:5px;color:${C.text};font-size:12px;padding:2px 6px;font-family:inherit;outline:none}
 .dsh-todo-main{flex:1 1 auto;min-width:0;min-height:0;display:flex;flex-direction:column}
 .dsh-todo-head{padding:14px 18px 0;border-bottom:1px solid ${C.border};flex:none}
 .dsh-todo-title-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .dsh-todo-title{font-size:20px;font-weight:500;margin:0}
+.dsh-todo-title .dsh-todo-color-dot{vertical-align:middle;margin-right:6px}
 .dsh-todo-count{font-size:11.5px;color:${C.dim};font-variant-numeric:tabular-nums}
 .dsh-todo-search{margin-left:auto;width:180px;box-sizing:border-box;background:transparent;border:1px solid ${C.border};border-radius:6px;color:${C.text};font-size:12px;padding:4px 8px;font-family:inherit;outline:none}
 .dsh-todo-search:focus{border-color:${C.accent}}
@@ -126,6 +135,10 @@
 .dsh-todo-row.active{background:var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, ${C.text} 7%, transparent))}
 .dsh-todo-row.selected{background:color-mix(in srgb, ${C.accent} 10%, transparent)}
 .dsh-todo-row.dragging{opacity:.5}
+.dsh-todo-row{background:color-mix(in srgb, var(--dsh-cat, transparent) 5%, transparent)}
+.dsh-todo-row:hover{background:color-mix(in srgb, var(--dsh-cat, ${C.text}) 10%, transparent)}
+.dsh-todo-row.active{background:color-mix(in srgb, var(--dsh-cat, ${C.text}) 8%, transparent)}
+.dsh-todo-row.selected{background:color-mix(in srgb, var(--dsw-alias-brand-primary, ${C.text}) 14%, transparent)}
 .dsh-todo-row.drop-target{box-shadow:inset 0 2px 0 ${C.accent}}
 .dsh-todo-folder-row{font-weight:600}
 .dsh-todo-nav-sub .dsh-todo-nav-row{padding-left:24px}
@@ -421,6 +434,15 @@
         return priority >= 1 && priority <= 3 ? 4 - priority : 4
       }
 
+      /** Resolve a category's background color, with a stable fallback. */
+      function categoryColor(list) {
+        if (list && typeof list.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(list.color)) return list.color
+        const seed = list !== undefined && list !== null && typeof list.id === 'string' ? list.id : 'inbox'
+        let hash = 0
+        for (let index = 0; index < seed.length; index += 1) hash = (hash * 31 + seed.charCodeAt(index)) >>> 0
+        return CATEGORY_COLORS[hash % CATEGORY_COLORS.length]
+      }
+
       function readNotified() {
         try {
           const parsed = JSON.parse(window.localStorage.getItem(NOTIFIED_KEY) || '[]')
@@ -539,9 +561,11 @@
         const [reminderAt, setReminderAt] = React.useState('')
         const [addingList, setAddingList] = React.useState(false)
         const [listName, setListName] = React.useState('')
+        const [newListColor, setNewListColor] = React.useState(CATEGORY_COLORS[0])
         const [editingListId, setEditingListId] = React.useState(null)
         const [renameValue, setRenameValue] = React.useState('')
         const [editFolderId, setEditFolderId] = React.useState('')
+        const [editListColor, setEditListColor] = React.useState(CATEGORY_COLORS[0])
         const [confirmListDelete, setConfirmListDelete] = React.useState(null)
         const [addingFolder, setAddingFolder] = React.useState(false)
         const [folderName, setFolderName] = React.useState('')
@@ -773,7 +797,7 @@
         const title = selection.kind === 'view'
           ? { today: '今天', upcoming: '最近 7 天', all: '全部', completed: '已完成' }[selection.id]
           : selection.kind === 'list'
-            ? (listById(selection.id)?.name || '清单')
+            ? (listById(selection.id)?.name || '分类')
             : selection.kind === 'tag'
               ? `#${selection.name}`
               : (selection.id === 'week' ? '周视图' : '月视图')
@@ -892,7 +916,7 @@
           setHint('')
           const explicitList = result.listName === null ? null : lists.find(list => list.name === result.listName || list.id === result.listName)
           if (result.listName !== null && explicitList === undefined) {
-            setHint(`清单「${result.listName}」不存在，先新建或改用 #标签`)
+            setHint(`分类「${result.listName}」不存在，先新建或改用 #标签`)
             return
           }
           const listId = result.listName !== null
@@ -1125,7 +1149,7 @@
           const name = listName.trim()
           if (name === '') return
           const before = new Set(lists.map(list => list.id))
-          const data = await mutate({ op: 'list.create', name })
+          const data = await mutate({ op: 'list.create', name, color: newListColor })
           setListName('')
           setAddingList(false)
           if (data !== null) {
@@ -1137,12 +1161,13 @@
         const saveListEdit = async (list) => {
           const name = renameValue.trim()
           const folderId = editFolderId === '' ? null : editFolderId
+          const color = editListColor
           setEditingListId(null)
           setRenameValue('')
           setEditFolderId('')
           if (name === '') return
-          if (name === list.name && folderId === (list.folderId || null)) return
-          await mutate({ op: 'list.update', id: list.id, name, folderId })
+          if (name === list.name && folderId === (list.folderId || null) && color === (list.color || categoryColor(list))) return
+          await mutate({ op: 'list.update', id: list.id, name, folderId, color })
         }
 
         const createFolder = async () => {
@@ -1339,6 +1364,24 @@
         h('span', { className: 'dsh-todo-nav-name' }, label),
         h('span', { className: 'dsh-todo-nav-count' }, count))
 
+        const colorPicker = (value, onPick) => h('div', { className: 'dsh-todo-colors' },
+          CATEGORY_COLORS.map(color => h('button', {
+            key: color,
+            type: 'button',
+            className: 'dsh-todo-color',
+            style: { background: color },
+            'aria-label': `背景色 ${color}`,
+            'aria-pressed': value === color ? 'true' : 'false',
+            onClick: event => { event.stopPropagation(); onPick(color) },
+          })),
+          h('input', {
+            type: 'color',
+            className: 'dsh-todo-color-input',
+            value: /^#[0-9a-fA-F]{6}$/.test(value) ? value : CATEGORY_COLORS[0],
+            'aria-label': '自定义背景色',
+            onChange: event => onPick(event.target.value),
+          }))
+
         const listRow = (list, nested = false) => {
           const active = selection.kind === 'list' && selection.id === list.id
           if (editingListId === list.id) {
@@ -1347,7 +1390,7 @@
                 className: 'dsh-todo-nav-input',
                 value: renameValue,
                 autoFocus: true,
-                'aria-label': '重命名清单',
+                'aria-label': '重命名分类',
                 onChange: event => setRenameValue(event.target.value),
                 onKeyDown: event => {
                   if (event.key === 'Enter' && !event.nativeEvent.isComposing) void saveListEdit(list)
@@ -1357,39 +1400,46 @@
               h('select', {
                 className: 'dsh-todo-nav-input',
                 value: editFolderId,
-                'aria-label': '清单所属文件夹',
+                'aria-label': '分类所属文件夹',
                 onChange: event => setEditFolderId(event.target.value),
               },
               h('option', { value: '' }, '无文件夹'),
               (state.folders || []).map(folder => h('option', { key: folder.id, value: folder.id }, folder.name))),
+              colorPicker(editListColor, setEditListColor),
               h('button', { type: 'button', className: 'dsh-todo-nav-save', onClick: () => { void saveListEdit(list) } }, '保存'))
           }
-          return h('div', { key: list.id, className: `dsh-todo-nav-item${nested ? ' dsh-todo-nav-sub' : ''}` },
+          const color = categoryColor(list)
+          return h('div', {
+            key: list.id,
+            className: `dsh-todo-nav-item${nested ? ' dsh-todo-nav-sub' : ''}`,
+            style: { background: `color-mix(in srgb, ${color} 10%, transparent)`, borderRadius: 6 },
+          },
             h('button', {
               type: 'button',
               className: 'dsh-todo-nav-row',
               'aria-current': active ? 'true' : 'false',
               onClick: () => setSelection({ kind: 'list', id: list.id }),
             },
-            h('span', { className: 'dsh-todo-nav-glyph', 'aria-hidden': 'true' }, '☰'),
+            h('span', { className: 'dsh-todo-color-dot', style: { background: color }, 'aria-hidden': 'true' }),
             h('span', { className: 'dsh-todo-nav-name' }, list.name),
             h('span', { className: 'dsh-todo-nav-count' }, countFor({ kind: 'list', id: list.id }))),
             h('span', { className: 'dsh-todo-nav-actions' },
               h('button', {
                 type: 'button',
-                title: '重命名或移动清单',
-                'aria-label': `重命名或移动清单 ${list.name}`,
+                title: '重命名、移动或改色',
+                'aria-label': `重命名、移动或改色 ${list.name}`,
                 onClick: event => {
                   event.stopPropagation()
                   setEditingListId(list.id)
                   setRenameValue(list.name)
                   setEditFolderId(list.folderId || '')
+                  setEditListColor(list.color || categoryColor(list))
                 },
               }, '✎'),
               list.id === 'inbox' ? null : h('button', {
                 type: 'button',
-                title: confirmListDelete === list.id ? '再点一次删除' : '删除清单',
-                'aria-label': confirmListDelete === list.id ? `再点一次确认删除清单 ${list.name}` : `删除清单 ${list.name}`,
+                title: confirmListDelete === list.id ? '再点一次删除' : '删除分类',
+                'aria-label': confirmListDelete === list.id ? `再点一次确认删除分类 ${list.name}` : `删除分类 ${list.name}`,
                 onClick: event => { event.stopPropagation(); void deleteList(list) },
               }, confirmListDelete === list.id ? '!' : '✕')),
           )
@@ -1512,9 +1562,11 @@
             ...task.tags.map(tag => h('span', { key: `tag:${tag}` }, `#${tag}`)),
           ].filter(Boolean)
           const className = `dsh-todo-row${index === activeIndex ? ' active' : ''}${selected ? ' selected' : ''}${dragId === task.id ? ' dragging' : ''}${dropId === task.id && dragId !== task.id ? ' drop-target' : ''}`
+          const color = categoryColor(list)
           return h('div', {
             key: task.id,
             className,
+            style: { '--dsh-cat': color, boxShadow: `inset 3px 0 0 ${color}` },
             draggable: canDrag,
             onDragStart: canDrag ? event => {
               setDragId(task.id)
@@ -1640,8 +1692,8 @@
           if (selection.kind === 'view' && selection.id === 'today') return ['今天没有待办', '在输入框里写「明天 18:00 交周报」会自动排到明天。']
           if (selection.kind === 'view' && selection.id === 'upcoming') return ['没有未来的待办', '试试「下周一 !1 #工作」这样的写法。']
           if (selection.kind === 'view' && selection.id === 'completed') return ['还没有完成的待办', '勾掉一条，它会出现在这里。']
-          if (selection.kind === 'list') return ['这个清单是空的', '在上面的输入框里加一条，或者用 ^清单 把任务放进别的清单。']
-          return ['没有待办', '回车即添加；!1 高优、#标签、^清单。']
+          if (selection.kind === 'list') return ['这个分类是空的', '在上面的输入框里加一条，或者用 ^分类 把任务放进别的分类。']
+          return ['没有待办', '回车即添加；!1 高优、#标签、^分类。']
         })()
 
         let listBody
@@ -1746,16 +1798,21 @@
 
         const boardView = () => {
           const columns = boardBy === 'list'
-            ? lists.map(list => ({ key: list.id, title: list.name, rows: rows.filter(task => task.listId === list.id) }))
+            ? lists.map(list => ({ key: list.id, title: list.name, color: categoryColor(list), rows: rows.filter(task => task.listId === list.id) }))
             : [3, 2, 1, 0].map(priority => ({ key: String(priority), title: priorityLabel(priority) || '无优先级', rows: rows.filter(task => task.priority === priority) }))
           const columnNodes = columns.map(column => h('div', {
             key: column.key,
             className: 'dsh-todo-board-col',
+            style: column.color
+              ? { background: `color-mix(in srgb, ${column.color} 8%, transparent)`, borderColor: column.color }
+              : undefined,
             onDragOver: event => event.preventDefault(),
             onDrop: event => { event.preventDefault(); dropOnColumn(column.key) },
           },
           h('div', { className: 'dsh-todo-board-col-head' },
-            h('span', null, column.title),
+            h('span', { className: 'dsh-todo-board-col-name' },
+              column.color ? h('span', { className: 'dsh-todo-color-dot', style: { background: column.color }, 'aria-hidden': 'true' }) : null,
+              column.title),
             h('span', { className: 'dsh-todo-nav-count' }, column.rows.length)),
           column.rows.length === 0
             ? h('div', { className: 'dsh-todo-board-empty' }, '拖动任务到这里')
@@ -1769,7 +1826,7 @@
                 onChange: event => setBoardBy(event.target.value),
               },
               h('option', { value: 'priority' }, '按优先级'),
-              h('option', { value: 'list' }, '按清单'))),
+              h('option', { value: 'list' }, '按分类'))),
             h('div', { className: 'dsh-todo-board' }, columnNodes))
         }
 
@@ -1806,9 +1863,11 @@
         const calendarChip = (task, showTime) => {
           const dateOnly = task.dueAt !== null && new Date(task.dueAt).getHours() === 23 && new Date(task.dueAt).getMinutes() === 59
           const time = task.dueAt === null ? '' : dateOnly ? '全天' : `${String(new Date(task.dueAt).getHours()).padStart(2, '0')}:${String(new Date(task.dueAt).getMinutes()).padStart(2, '0')}`
+          const color = categoryColor(listById(task.listId))
           return h('div', {
             key: task.id,
             className: 'dsh-todo-cal-task',
+            style: { borderLeft: `3px solid ${color}` },
             title: `${time === '' ? '' : `${time} `}${task.title}`,
             draggable: true,
             onDragStart: event => {
@@ -1946,6 +2005,7 @@
           const byList = lists.map(list => ({
             id: list.id,
             name: list.name,
+            color: categoryColor(list),
             count: liveTasks.filter(task => task.status === 'open' && task.listId === list.id).length,
           })).filter(item => item.count > 0).sort((a, b) => b.count - a.count)
           const byTag = tagList.map(tag => ({
@@ -1968,9 +2028,11 @@
                   title: `${bucket.label}：${bucket.count} 条`,
                 })))),
             h('div', { className: 'dsh-todo-stat-section' },
-              h('div', { className: 'dsh-todo-rail-title' }, '未完成 · 按清单'),
+              h('div', { className: 'dsh-todo-rail-title' }, '未完成 · 按分类'),
               byList.length === 0 ? h('div', { className: 'dsh-todo-stat-empty' }, '没有未完成任务') : byList.map(item => h('div', { key: item.id, className: 'dsh-todo-stat-row' },
-                h('span', null, item.name),
+                h('span', { className: 'dsh-todo-stat-name' },
+                  h('span', { className: 'dsh-todo-color-dot', style: { background: item.color }, 'aria-hidden': 'true' }),
+                  item.name),
                 h('span', { className: 'dsh-todo-nav-count' }, item.count)))),
             h('div', { className: 'dsh-todo-stat-section' },
               h('div', { className: 'dsh-todo-rail-title' }, '未完成 · 按标签'),
@@ -1991,7 +2053,7 @@
         return h('div', { className: 'dsh-todo-page', onKeyDown: handleKeyDown },
           h('style', null, CSS),
           h('aside', { className: 'dsh-todo-rail' },
-            h('div', { className: 'dsh-todo-rail-title' }, '智能清单'),
+            h('div', { className: 'dsh-todo-rail-title' }, '智能视图'),
             h('div', { className: 'dsh-todo-nav' },
               smartItems.map(entry => navButton(entry.item, entry.label, countFor(entry.item), entry.glyph))),
             h('div', { className: 'dsh-todo-rail-title' }, '文件夹',
@@ -2019,23 +2081,32 @@
                 }
                 return items
               })),
-            h('div', { className: 'dsh-todo-rail-title' }, '清单',
-              h('button', { type: 'button', title: '新建清单', 'aria-label': '新建清单', onClick: () => setAddingList(true) }, '+')),
+            h('div', { className: 'dsh-todo-rail-title' }, '分类',
+              h('button', {
+                type: 'button',
+                title: '新建分类',
+                'aria-label': '新建分类',
+                onClick: () => {
+                  setAddingList(true)
+                  setNewListColor(CATEGORY_COLORS[lists.length % CATEGORY_COLORS.length])
+                },
+              }, '+')),
             h('div', { className: 'dsh-todo-nav' },
               addingList
-                ? h('input', {
-                  className: 'dsh-todo-nav-input',
-                  value: listName,
-                  autoFocus: true,
-                  placeholder: '清单名称',
-                  'aria-label': '新清单名称',
-                  onChange: event => setListName(event.target.value),
-                  onKeyDown: event => {
-                    if (event.key === 'Enter' && !event.nativeEvent.isComposing) void createList()
-                    if (event.key === 'Escape') { setAddingList(false); setListName('') }
-                  },
-                  onBlur: () => { if (listName.trim() === '') { setAddingList(false); setListName('') } },
-                })
+                ? h('div', { className: 'dsh-todo-list-editor' },
+                  h('input', {
+                    className: 'dsh-todo-nav-input',
+                    value: listName,
+                    autoFocus: true,
+                    placeholder: '分类名称',
+                    'aria-label': '新分类名称',
+                    onChange: event => setListName(event.target.value),
+                    onKeyDown: event => {
+                      if (event.key === 'Enter' && !event.nativeEvent.isComposing) void createList()
+                      if (event.key === 'Escape') { setAddingList(false); setListName('') }
+                    },
+                  }),
+                  colorPicker(newListColor, setNewListColor))
                 : null,
               ungroupedLists.map(list => listRow(list))),
             tagList.length === 0 ? null : h('div', { className: 'dsh-todo-rail-title' }, '标签'),
@@ -2044,7 +2115,11 @@
           h('main', { className: 'dsh-todo-main' },
             h('div', { className: 'dsh-todo-head' },
               h('div', { className: 'dsh-todo-title-row' },
-                h('h2', { className: 'dsh-todo-title' }, title),
+                h('h2', { className: 'dsh-todo-title' },
+                  selection.kind === 'list' && listById(selection.id)
+                    ? h('span', { className: 'dsh-todo-color-dot', style: { background: categoryColor(listById(selection.id)) }, 'aria-hidden': 'true' })
+                    : null,
+                  title),
                 h('span', { className: 'dsh-todo-count' }, `${rows.length} 条${stats.overdue ? ` · ${stats.overdue} 条逾期` : ''}`),
                 h('select', {
                   className: 'dsh-todo-view-select',
@@ -2133,7 +2208,7 @@
               h('button', { type: 'button', disabled: selectedIds.length === 0, onClick: () => { void bulkComplete() } }, '完成'),
               h('select', {
                 value: bulkListId,
-                'aria-label': '批量移动到清单',
+                'aria-label': '批量移动到分类',
                 onChange: event => setBulkListId(event.target.value),
               }, lists.map(list => h('option', { key: list.id, value: list.id }, list.name))),
               h('button', { type: 'button', disabled: selectedIds.length === 0, onClick: () => { void bulkMove() } }, '移动'),
@@ -2283,7 +2358,7 @@
                     h('button', { type: 'button', disabled: busy || activeReminders >= 5, onClick: () => { void addReminder(60) } }, '提前 1 小时'),
                     h('button', { type: 'button', disabled: busy || activeReminders >= 5, onClick: () => { void addReminder(1440) } }, '提前 1 天'))),
                 h('div', { className: 'dsh-todo-field' },
-                  h('label', { htmlFor: 'dsh-todo-detail-list' }, '清单'),
+                  h('label', { htmlFor: 'dsh-todo-detail-list' }, '分类'),
                   h('select', {
                     id: 'dsh-todo-detail-list',
                     value: detailDraft.listId,
@@ -2399,7 +2474,7 @@
                   onChange: event => setCreateDraft(current => ({ ...current, subtasks: event.target.value })),
                 })),
               h('div', { className: 'dsh-todo-field' },
-                h('label', { htmlFor: 'dsh-todo-create-list' }, '清单'),
+                h('label', { htmlFor: 'dsh-todo-create-list' }, '分类'),
                 h('select', {
                   id: 'dsh-todo-create-list',
                   value: createDraft.listId,

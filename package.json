@@ -1,6 +1,6 @@
 {
   "name": "@magic_01/dsh-sidebar-todo",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "DeepSeek Harness 侧栏待办：清单/标签/子任务、提醒与重复任务、看板/月周日历/四象限/统计，Agent 可读写同一份数据。",
   "keywords": [
     "dsh",
