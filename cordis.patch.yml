@@ -1,0 +1,4 @@
+# Host half of the sidebar todo bundle. The Client half renders the left-sidebar page.
+- insert:
+    - id: dsh-sidebar-todo
+      name: '@magic_01/dsh-sidebar-todo'

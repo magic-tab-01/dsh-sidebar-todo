@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sidebar todo",
+    "description": "A resident todo list in the left sidebar: smart views, folders and lists, tags, subtasks, multiple reminders with snooze, repeating tasks, a detail drawer, manual sort and drag, bulk actions, and list/board/month-week-day calendar/matrix/stats views. The agent shares the same store through todo_manage."
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "@magic_01/dsh-sidebar-todo",
+  "version": "1.0.1",
+  "description": "DeepSeek Harness 侧栏待办：清单/标签/子任务、提醒与重复任务、看板/月周日历/四象限/统计，Agent 可读写同一份数据。",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "todo",
+    "task",
+    "sidebar",
+    "subtasks",
+    "calendar"
+  ],
+  "type": "module",
+  "license": "MIT",
+  "author": "magic_01",
+  "engines": {
+    "dsh": ">=0.2.2-rc.1 <0.3.0-0",
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  }
+}
