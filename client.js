@@ -1909,11 +1909,13 @@
             ? '开始'
             : phase === 'end'
               ? '截止'
-              : task.dueAt === null
-                ? ''
-                : dateOnly
-                  ? '全天'
-                  : `${String(new Date(task.dueAt).getHours()).padStart(2, '0')}:${String(new Date(task.dueAt).getMinutes()).padStart(2, '0')}`
+              : phase === 'during'
+                ? '进行中'
+                : task.dueAt === null
+                  ? ''
+                  : dateOnly
+                    ? '全天'
+                    : `${String(new Date(task.dueAt).getHours()).padStart(2, '0')}:${String(new Date(task.dueAt).getMinutes()).padStart(2, '0')}`
           const color = categoryColor(listById(task.listId))
           return h('div', {
             key: task.id,
@@ -1943,11 +1945,23 @@
             const startKey = task.startAt !== null ? dayKey(task.startAt) : null
             const dueKey = task.dueAt !== null ? dayKey(task.dueAt) : null
             if (startKey !== null && dueKey !== null) {
-              if (startKey === dueKey) {
-                pushDay(dueKey, task, '')
-              } else {
+              const startDate = new Date(task.startAt)
+              startDate.setHours(0, 0, 0, 0)
+              const endDate = new Date(task.dueAt)
+              endDate.setHours(0, 0, 0, 0)
+              if (endDate.getTime() < startDate.getTime()) {
                 pushDay(startKey, task, 'start')
-                pushDay(dueKey, task, 'end')
+              } else {
+                let cursor = startDate
+                let guard = 0
+                while (cursor.getTime() <= endDate.getTime() && guard < 366) {
+                  const key = dayKey(cursor.getTime())
+                  const isStart = cursor.getTime() === startDate.getTime()
+                  const isEnd = cursor.getTime() === endDate.getTime()
+                  pushDay(key, task, isStart && isEnd ? '' : isStart ? 'start' : isEnd ? 'end' : 'during')
+                  cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1)
+                  guard += 1
+                }
               }
             } else if (dueKey !== null) {
               pushDay(dueKey, task, '')
