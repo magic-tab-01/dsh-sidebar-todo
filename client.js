@@ -1590,7 +1590,8 @@
               className: 'dsh-todo-subtoggle',
               'aria-expanded': collapsedSubs.includes(task.id) ? 'false' : 'true',
               title: collapsedSubs.includes(task.id) ? '展开子任务' : '收起子任务',
-              onClick: event => { event.stopPropagation(); toggleSubs(task.id) },
+              onMouseDown: event => event.stopPropagation(),
+              onClick: event => { event.preventDefault(); event.stopPropagation(); toggleSubs(task.id) },
             }, `${collapsedSubs.includes(task.id) ? '▸' : '▾'} 子任务 ${subDone}/${task.subtasks.length}`),
             task.reminders.length === 0 ? null : (() => {
               const active = task.reminders.filter(reminder => reminder.firedAt === null).length
@@ -1659,7 +1660,13 @@
               role: 'button',
               tabIndex: 0,
               'aria-label': `打开：${task.title}`,
-              onClick: () => (selectMode ? toggleSelected(task.id) : openDetail(task)),
+              onClick: event => {
+                // The subtask toggle lives inside the body; never let its click
+                // fall through and open the detail drawer instead of folding.
+                if (event.target && typeof event.target.closest === 'function' && event.target.closest('.dsh-todo-subtoggle')) return
+                if (selectMode) toggleSelected(task.id)
+                else openDetail(task)
+              },
               onKeyDown: event => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault()
