@@ -1399,6 +1399,14 @@
             onChange: event => onPick(event.target.value),
           }))
 
+        const focusCategoryCalendar = listId => {
+          const dated = liveTasks
+            .filter(task => task.listId === listId && (task.dueAt !== null || task.startAt !== null))
+            .sort((a, b) => (a.dueAt || a.startAt) - (b.dueAt || b.startAt))
+          const focus = dated.find(task => task.dueAt !== null) || dated[0]
+          if (focus !== undefined) setCalendarMonth(focus.dueAt !== null ? focus.dueAt : focus.startAt)
+        }
+
         const listRow = (list, nested = false) => {
           const active = selection.kind === 'list' && selection.id === list.id
           if (editingListId === list.id) {
@@ -1435,7 +1443,13 @@
               type: 'button',
               className: 'dsh-todo-nav-row',
               'aria-current': active ? 'true' : 'false',
-              onClick: () => setSelection({ kind: 'list', id: list.id }),
+              onClick: () => {
+                setSelection({ kind: 'list', id: list.id })
+                // A leftover search is the usual reason a category looks empty;
+                // opening a category is an explicit navigation, so clear it.
+                setSearch('')
+                if (mode === 'calendar') focusCategoryCalendar(list.id)
+              },
             },
             h('span', { className: 'dsh-todo-color-dot', style: { background: color }, 'aria-hidden': 'true' }),
             h('span', { className: 'dsh-todo-nav-name' }, list.name),
@@ -2166,7 +2180,8 @@
                     setMode(next)
                     if (next === 'calendar') {
                       if (!['week', 'month'].includes(calendarMode)) setCalendarMode('month')
-                      setCalendarMonth(Date.now())
+                      if (selection.kind === 'list') focusCategoryCalendar(selection.id)
+                      else setCalendarMonth(Date.now())
                     } else if (selection.kind === 'calendar') {
                       setSelection({ kind: 'view', id: 'all' })
                     }
