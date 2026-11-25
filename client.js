@@ -1903,9 +1903,17 @@
           void mutate({ op: 'task.update', id: task.id, dueAt: target.getTime() })
         }
 
-        const calendarChip = (task, showTime) => {
+        const calendarChip = (task, showTime, phase = '') => {
           const dateOnly = task.dueAt !== null && new Date(task.dueAt).getHours() === 23 && new Date(task.dueAt).getMinutes() === 59
-          const time = task.dueAt === null ? '' : dateOnly ? '全天' : `${String(new Date(task.dueAt).getHours()).padStart(2, '0')}:${String(new Date(task.dueAt).getMinutes()).padStart(2, '0')}`
+          const time = phase === 'start'
+            ? '开始'
+            : phase === 'end'
+              ? '截止'
+              : task.dueAt === null
+                ? ''
+                : dateOnly
+                  ? '全天'
+                  : `${String(new Date(task.dueAt).getHours()).padStart(2, '0')}:${String(new Date(task.dueAt).getMinutes()).padStart(2, '0')}`
           const color = categoryColor(listById(task.listId))
           return h('div', {
             key: task.id,
@@ -1927,13 +1935,27 @@
         const calendarView = () => {
           const anchor = new Date(calendarMonth)
           const byDay = new Map()
-          for (const task of rows) {
-            if (task.dueAt === null) continue
-            const key = dayKey(task.dueAt)
+          const pushDay = (key, task, phase) => {
             if (!byDay.has(key)) byDay.set(key, [])
-            byDay.get(key).push(task)
+            byDay.get(key).push({ task, phase })
           }
-          for (const list of byDay.values()) list.sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0))
+          for (const task of rows) {
+            const startKey = task.startAt !== null ? dayKey(task.startAt) : null
+            const dueKey = task.dueAt !== null ? dayKey(task.dueAt) : null
+            if (startKey !== null && dueKey !== null) {
+              if (startKey === dueKey) {
+                pushDay(dueKey, task, '')
+              } else {
+                pushDay(startKey, task, 'start')
+                pushDay(dueKey, task, 'end')
+              }
+            } else if (dueKey !== null) {
+              pushDay(dueKey, task, '')
+            } else if (startKey !== null) {
+              pushDay(startKey, task, 'start')
+            }
+          }
+          for (const list of byDay.values()) list.sort((a, b) => ((a.task.dueAt || a.task.startAt) - (b.task.dueAt || b.task.startAt)))
           const weekdayNames = ['一', '二', '三', '四', '五', '六', '日']
           let label
           if (calendarMode === 'month') {
@@ -1952,7 +1974,7 @@
               type: 'button',
               onClick: () => { const date = new Date(); setCalendarMonth(date.getTime()) },
             }, '今天'))
-          const undatedTasks = rows.filter(task => task.dueAt === null)
+          const undatedTasks = rows.filter(task => task.dueAt === null && task.startAt === null)
           const unscheduled = undatedTasks.length === 0 ? null : h('div', { className: 'dsh-todo-unscheduled' },
             h('span', { className: 'dsh-todo-unscheduled-title' }, `未排期 ${undatedTasks.length}`),
             h('div', { className: 'dsh-todo-unscheduled-list' },
@@ -1983,7 +2005,7 @@
                     onDrop: event => { event.preventDefault(); dropOnDay(date.getTime()) },
                   },
                   h('div', { className: 'dsh-todo-cal-date' }, date.getDate()),
-                  tasks.slice(0, 4).map(task => calendarChip(task, false)),
+                  tasks.slice(0, 4).map(entry => calendarChip(entry.task, false, entry.phase)),
                   tasks.length > 4 ? h('div', { className: 'dsh-todo-cal-more' }, `+${tasks.length - 4}`) : null)
                 })))
           }
@@ -2009,7 +2031,7 @@
                   },
                   tasks.length === 0
                     ? h('div', { className: 'dsh-todo-cal-more' }, '—')
-                    : tasks.map(task => calendarChip(task, true)))
+                    : tasks.map(entry => calendarChip(entry.task, true, entry.phase)))
                 })))
           }
         }
