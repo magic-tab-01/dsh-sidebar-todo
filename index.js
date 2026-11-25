@@ -143,6 +143,7 @@ function sanitizeTask(raw, listIds) {
     status: completed ? 'completed' : 'open',
     priority: Number.isInteger(raw.priority) && raw.priority >= 0 && raw.priority <= 3 ? raw.priority : 0,
     dueAt: Number.isFinite(raw.dueAt) ? Number(raw.dueAt) : null,
+    startAt: Number.isFinite(raw.startAt) ? Number(raw.startAt) : null,
     tags,
     subtasks,
     reminders,
@@ -219,6 +220,7 @@ function migrateV1(parsed) {
       status: done ? 'completed' : 'open',
       priority,
       dueAt,
+      startAt: null,
       tags: typeof todo.tag === 'string' && todo.tag.trim() !== '' ? [todo.tag.trim().slice(0, MAX_TAG)] : [],
       subtasks: [],
       reminders: dueAt === null ? [] : reminderFor(dueAt, now),
@@ -477,6 +479,8 @@ function applyOp(store, op) {
     if (title === '') return { ok: false, error: '待办内容不能为空' }
     const listId = lists().some(list => list.id === op.listId) ? op.listId : (op.list ? resolveList(state, op.list) : state.settings.defaultListId)
     const dueAt = parseDue(op.dueAt !== undefined ? op.dueAt : op.due)
+    const startAt = parseDue(op.startAt !== undefined ? op.startAt : op.start)
+    if (startAt !== null && dueAt !== null && startAt > dueAt) return { ok: false, error: '开始时间不能晚于截止时间' }
     let recurrence = sanitizeRecurrence(op.recurrence)
     if (recurrence !== null && dueAt === null) return { ok: false, error: '重复任务需要先设置截止时间' }
     recurrence = normalizeRecurrenceFor(recurrence, dueAt)
@@ -493,6 +497,7 @@ function applyOp(store, op) {
       status: 'open',
       priority: parsePriority(op.priority),
       dueAt,
+      startAt,
       tags: parseTags(op.tags !== undefined ? op.tags : op.tag),
       subtasks,
       reminders: reminders.slice(0, MAX_REMINDERS),
@@ -644,6 +649,7 @@ function applyOp(store, op) {
           id: newId('t'),
           status: 'open',
           dueAt: nextAt,
+          startAt: target.startAt !== null ? nextAt - (base - target.startAt) : null,
           reminders: shifted.length > 0 ? shifted : reminderFor(nextAt, now),
           subtasks: target.subtasks.map((item, index) => ({ ...item, id: newId('s'), done: false, order: index })),
           seriesId: target.seriesId || target.id,
@@ -693,6 +699,12 @@ function applyOp(store, op) {
     if (op.listId !== undefined) patch.listId = lists().some(list => list.id === op.listId) ? op.listId : 'inbox'
     else if (op.list !== undefined) patch.listId = resolveList(state, op.list)
     if (op.dueAt !== undefined || op.due !== undefined) patch.dueAt = parseDue(op.dueAt !== undefined ? op.dueAt : op.due)
+    if (op.startAt !== undefined || op.start !== undefined) patch.startAt = parseDue(op.startAt !== undefined ? op.startAt : op.start)
+    const effectiveStart = patch.startAt !== undefined ? patch.startAt : target.startAt
+    const effectiveDue = patch.dueAt !== undefined ? patch.dueAt : target.dueAt
+    if (effectiveStart !== null && effectiveDue !== null && effectiveStart > effectiveDue) {
+      return { ok: false, error: '开始时间不能晚于截止时间' }
+    }
     if (op.priority !== undefined) patch.priority = parsePriority(op.priority)
     if (op.tags !== undefined || op.tag !== undefined) patch.tags = parseTags(op.tags !== undefined ? op.tags : op.tag)
     if (op.recurrence !== undefined) {
@@ -835,6 +847,7 @@ export function apply(ctx) {
           id: { type: 'string', description: 'done/undone/toggle/remove/restore/update: task id.' },
           list: { type: 'string', description: 'add/list: list id or name.' },
           due: { type: 'string', description: 'add/update: due time as ISO 8601, or empty to clear.' },
+          start: { type: 'string', description: 'add/update: start time as ISO 8601, or empty to clear.' },
           priority: { type: 'integer', enum: [0, 1, 2, 3], description: '0 none, 1 low, 2 medium, 3 high.' },
           tags: { type: 'string', description: 'add/update: comma-separated tags, or empty to clear.' },
           notes: { type: 'string', description: 'add/update: notes.' },
@@ -884,12 +897,13 @@ export function apply(ctx) {
           if (rows.length === 0) return { text: '没有符合条件的待办。' }
           const listName = id => current.lists.find(list => list.id === id)?.name || id
           const lines = rows.map(task => {
+            const start = task.startAt === null ? '' : ` · 开始 ${dueLabel(task.startAt)}`
             const due = task.dueAt === null ? '' : ` · 截止 ${dueLabel(task.dueAt)}${task.dueAt < Date.now() && task.status === 'open' ? '（已逾期）' : ''}`
             const priority = task.priority === 3 ? ' · 高' : task.priority === 2 ? ' · 中' : task.priority === 1 ? ' · 低' : ''
             const tags = task.tags.length === 0 ? '' : ` · ${task.tags.map(tag => `#${tag}`).join(' ')}`
             const subs = task.subtasks.length === 0 ? '' : ` · 子任务 ${task.subtasks.filter(item => item.done).length}/${task.subtasks.length}`
             const repeat = task.recurrence === null ? '' : ` · 重复 ${task.recurrence.kind}`
-            return `${task.status === 'completed' ? '[x]' : '[ ]'} ${task.title} · ${listName(task.listId)}${due}${priority}${tags}${subs}${repeat} (id=${task.id})`
+            return `${task.status === 'completed' ? '[x]' : '[ ]'} ${task.title} · ${listName(task.listId)}${start}${due}${priority}${tags}${subs}${repeat} (id=${task.id})`
           })
           const counts = stats(current.tasks)
           return { text: `${lines.join('\n')}\n\n共 ${rows.length} 条；未完成 ${counts.open} 条。` }

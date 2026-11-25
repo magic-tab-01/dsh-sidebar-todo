@@ -414,7 +414,7 @@
 
       /** Local `datetime-local` value for an epoch time. */
       function toLocalInput(ms) {
-        if (ms === null) return ''
+        if (ms === null || ms === undefined || !Number.isFinite(ms)) return ''
         const date = new Date(ms)
         const pad = value => String(value).padStart(2, '0')
         return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
@@ -819,6 +819,7 @@
             listId: task.listId,
             priority: String(task.priority),
             dueLocal: toLocalInput(task.dueAt),
+            startLocal: toLocalInput(task.startAt),
             tags: task.tags.join(', '),
             repeat: task.recurrence === null ? '' : task.recurrence.kind,
             weekdays: task.recurrence !== null && Array.isArray(task.recurrence.weekdays) ? task.recurrence.weekdays : [],
@@ -841,6 +842,7 @@
             listId,
             priority: '0',
             dueLocal: '',
+            startLocal: '',
             tags: '',
             subtasks: '',
             repeat: '',
@@ -975,8 +977,13 @@
             return
           }
           const dueAt = detailDraft.dueLocal === '' ? null : new Date(detailDraft.dueLocal).getTime()
-          if (dueAt !== null && !Number.isFinite(dueAt)) {
+          const startAt = detailDraft.startLocal === '' ? null : new Date(detailDraft.startLocal).getTime()
+          if ((dueAt !== null && !Number.isFinite(dueAt)) || (startAt !== null && !Number.isFinite(startAt))) {
             setDetailError('日期格式不正确')
+            return
+          }
+          if (startAt !== null && dueAt !== null && startAt > dueAt) {
+            setDetailError('开始时间不能晚于截止时间')
             return
           }
           const current = taskById(detailId)
@@ -998,6 +1005,7 @@
             listId: detailDraft.listId,
             priority: Number(detailDraft.priority),
             dueAt,
+            startAt,
             tags: detailDraft.tags,
             reminders,
             recurrence: detailDraft.repeat === ''
@@ -1019,8 +1027,13 @@
             return
           }
           const dueAt = createDraft.dueLocal === '' ? null : new Date(createDraft.dueLocal).getTime()
-          if (dueAt !== null && !Number.isFinite(dueAt)) {
+          const startAt = createDraft.startLocal === '' ? null : new Date(createDraft.startLocal).getTime()
+          if ((dueAt !== null && !Number.isFinite(dueAt)) || (startAt !== null && !Number.isFinite(startAt))) {
             setCreateError('日期格式不正确')
+            return
+          }
+          if (startAt !== null && dueAt !== null && startAt > dueAt) {
+            setCreateError('开始时间不能晚于截止时间')
             return
           }
           const data = await mutate({
@@ -1030,6 +1043,7 @@
             listId: createDraft.listId,
             priority: Number(createDraft.priority),
             dueAt,
+            startAt,
             tags: createDraft.tags,
             subtasks: createDraft.subtasks.split(/[,，\n]+/).map(item => item.trim()).filter(Boolean),
             recurrence: createDraft.repeat === ''
@@ -1537,6 +1551,12 @@
 
         const rowView = (task, index) => {
           const due = task.dueAt === null ? null : formatDue(task.dueAt, now)
+          const startText = task.startAt === null ? null : formatDue(task.startAt, now)
+          const timeline = task.startAt === null
+            ? due
+            : task.dueAt === null
+              ? `开始 ${startText}`
+              : `${startText} → ${due}`
           const overdue = task.dueAt !== null && task.status === 'open' && task.dueAt < now
           const priority = priorityLabel(task.priority)
           const list = listById(task.listId)
@@ -1544,7 +1564,7 @@
           const selected = selectedIds.includes(task.id)
           const canDrag = sortMode === 'manual' && !selectMode
           const meta = [
-            due === null ? null : h('span', { key: 'due', className: `dsh-todo-due${overdue ? ' overdue' : ''}` }, due),
+            timeline === null ? null : h('span', { key: 'due', className: `dsh-todo-due${overdue ? ' overdue' : ''}` }, timeline),
             priority === '' ? null : h('span', { key: 'pri', className: 'dsh-todo-pri' }, priority),
             task.subtasks.length === 0 ? null : h('button', {
               key: 'subs',
@@ -1716,9 +1736,15 @@
         const errorText = saveError || loadError
         const taskMeta = task => {
           const due = task.dueAt === null ? null : formatDue(task.dueAt, now)
+          const startText = task.startAt === null ? null : formatDue(task.startAt, now)
+          const timeline = task.startAt === null
+            ? due
+            : task.dueAt === null
+              ? `开始 ${startText}`
+              : `${startText} → ${due}`
           const list = listById(task.listId)
           return [
-            due === null ? null : h('span', { key: 'due', className: `dsh-todo-due${task.dueAt < now && task.status === 'open' ? ' overdue' : ''}` }, due),
+            timeline === null ? null : h('span', { key: 'due', className: `dsh-todo-due${task.dueAt !== null && task.dueAt < now && task.status === 'open' ? ' overdue' : ''}` }, timeline),
             task.priority === 0 ? null : h('span', { key: 'pri', className: 'dsh-todo-pri' }, priorityLabel(task.priority)),
             task.subtasks.length === 0 ? null : h('span', { key: 'subs' }, `☑ ${task.subtasks.filter(item => item.done).length}/${task.subtasks.length}`),
             list ? h('span', { key: 'list' }, list.name) : null,
@@ -2386,6 +2412,16 @@
                   h('option', { value: '2' }, '中'),
                   h('option', { value: '3' }, '高'))),
                 h('div', { className: 'dsh-todo-field' },
+                  h('label', { htmlFor: 'dsh-todo-detail-start' }, '开始'),
+                  h('div', { className: 'dsh-todo-inline' },
+                    h('input', {
+                      id: 'dsh-todo-detail-start',
+                      type: 'datetime-local',
+                      value: detailDraft.startLocal,
+                      onChange: event => setDetailDraft(current => ({ ...current, startLocal: event.target.value })),
+                    }),
+                    h('button', { type: 'button', onClick: () => setDetailDraft(current => ({ ...current, startLocal: '' })) }, '清除'))),
+                h('div', { className: 'dsh-todo-field' },
                   h('label', { htmlFor: 'dsh-todo-detail-due' }, '截止'),
                   h('div', { className: 'dsh-todo-inline' },
                     h('input', {
@@ -2501,6 +2537,16 @@
                 h('option', { value: '1' }, '低'),
                 h('option', { value: '2' }, '中'),
                 h('option', { value: '3' }, '高'))),
+              h('div', { className: 'dsh-todo-field' },
+                h('label', { htmlFor: 'dsh-todo-create-start' }, '开始'),
+                h('div', { className: 'dsh-todo-inline' },
+                  h('input', {
+                    id: 'dsh-todo-create-start',
+                    type: 'datetime-local',
+                    value: createDraft.startLocal,
+                    onChange: event => setCreateDraft(current => ({ ...current, startLocal: event.target.value })),
+                  }),
+                  h('button', { type: 'button', onClick: () => setCreateDraft(current => ({ ...current, startLocal: '' })) }, '清除'))),
               h('div', { className: 'dsh-todo-field' },
                 h('label', { htmlFor: 'dsh-todo-create-due' }, '截止'),
                 h('div', { className: 'dsh-todo-inline' },
