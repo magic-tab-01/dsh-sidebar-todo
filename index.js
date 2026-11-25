@@ -294,12 +294,14 @@ function stats(tasks, now = Date.now()) {
   const todayEnd = endOfDay(now)
   const todayStart = startOfDay(now)
   const upcomingEnd = endOfDay(todayStart + 6 * 86400000)
+  const coversToday = task => (task.dueAt !== null && task.dueAt <= todayEnd)
+    || (task.startAt !== null && task.startAt <= todayEnd && (task.dueAt === null || task.dueAt >= todayStart))
   return {
     total: live.length,
     open: open.length,
     done: live.length - open.length,
     overdue: open.filter(task => task.dueAt !== null && task.dueAt < now).length,
-    today: open.filter(task => task.dueAt !== null && task.dueAt <= todayEnd).length,
+    today: open.filter(coversToday).length,
     upcoming: open.filter(task => task.dueAt !== null && task.dueAt >= todayStart && task.dueAt <= upcomingEnd).length,
   }
 }
@@ -399,6 +401,8 @@ function queryTasks(state, options = {}) {
   const todayEnd = endOfDay(now)
   const todayStart = startOfDay(now)
   const upcomingEnd = endOfDay(todayStart + 6 * 86400000)
+  const coversToday = task => (task.dueAt !== null && task.dueAt <= todayEnd)
+    || (task.startAt !== null && task.startAt <= todayEnd && (task.dueAt === null || task.dueAt >= todayStart))
   const view = String(options.view || options.filter || 'all')
   const search = String(options.search || '').trim().toLowerCase()
   const listId = options.listId || null
@@ -407,7 +411,7 @@ function queryTasks(state, options = {}) {
   const rows = state.tasks.filter(task => {
     if (task.deletedAt) return false
     if (includeDone ? task.status !== 'completed' : task.status === 'completed') return false
-    if (view === 'today' && (task.dueAt === null || task.dueAt > todayEnd)) return false
+    if (view === 'today' && !coversToday(task)) return false
     if (view === 'upcoming' && (task.dueAt === null || task.dueAt < todayStart || task.dueAt > upcomingEnd)) return false
     if (listId !== null && task.listId !== listId) return false
     if (tag !== null && !task.tags.includes(tag)) return false

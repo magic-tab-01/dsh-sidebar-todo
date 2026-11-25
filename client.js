@@ -696,6 +696,10 @@
         const liveTasks = state.tasks.filter(task => !task.deletedAt)
         const endToday = endOfDay(now)
         const startToday = startOfDay(now)
+        // "Today" includes anything due today/overdue and any stage task whose
+        // start..due window covers today (even when the due date is later).
+        const coversToday = task => (task.dueAt !== null && task.dueAt <= endToday)
+          || (task.startAt !== null && task.startAt <= endToday && (task.dueAt === null || task.dueAt >= startToday))
         const lists = state.lists.filter(list => !list.deletedAt)
         const folders = [...(state.folders || [])].sort((a, b) => (a.order || 0) - (b.order || 0))
         const ungroupedLists = lists.filter(list => !list.folderId)
@@ -710,7 +714,7 @@
           if (selection.kind === 'view') {
             if (selection.id === 'completed') return task.status === 'completed'
             if (task.status === 'completed') return false
-            if (selection.id === 'today') return task.dueAt !== null && task.dueAt <= endToday
+            if (selection.id === 'today') return coversToday(task)
             if (selection.id === 'upcoming') return task.dueAt !== null && task.dueAt >= startToday && task.dueAt <= endOfDay(now + 6 * DAY)
             return true
           }
@@ -790,7 +794,7 @@
           if (item.kind === 'view') {
             if (item.id === 'completed') return liveTasks.filter(task => task.status === 'completed').length
             return liveTasks.filter(task => task.status === 'open' && (item.id === 'today'
-              ? task.dueAt !== null && task.dueAt <= endToday
+              ? coversToday(task)
               : item.id === 'upcoming' ? task.dueAt !== null && task.dueAt >= startToday && task.dueAt <= endOfDay(now + 6 * DAY) : true)).length
           }
           if (item.kind === 'list') return liveTasks.filter(task => task.status === 'open' && task.listId === item.id).length
